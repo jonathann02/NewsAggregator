@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import re
 from typing import Iterable, Sequence
@@ -32,22 +32,10 @@ DEFAULT_YOUTUBE_COOKIES = {"CONSENT": "YES+", "SOCS": "CAI"}
 
 
 @dataclass(slots=True)
-class VideoItem:
-    channel_input: str
-    channel_id: str
-    video_id: str
-    title: str
-    url: str
-    published_at: datetime
-    transcript: str | None
-    transcript_error: str | None
-
-
-@dataclass(slots=True)
 class ChannelResult:
     channel_input: str
     channel_id: str | None
-    videos: list[VideoItem]
+    videos: list["YouTubeVideoModel"]
     error: str | None
 
 
@@ -133,10 +121,10 @@ class YouTubeSurfaceScraper:
         include_transcripts: bool,
         transcript_languages: Sequence[str],
         max_videos: int | None = None,
-    ) -> list[VideoItem]:
+    ) -> list[YouTubeVideoModel]:
         feed_url = f"{YOUTUBE_FEED_BASE}{channel_id}"
         feed = feedparser.parse(feed_url)
-        videos: list[VideoItem] = []
+        videos: list[YouTubeVideoModel] = []
 
         for entry in feed.entries:
             published_at = self.parse_entry_datetime(entry)
@@ -154,7 +142,7 @@ class YouTubeSurfaceScraper:
                 transcript, transcript_error = self.get_video_transcript(video_id, transcript_languages)
 
             videos.append(
-                VideoItem(
+                YouTubeVideoModel(
                     channel_input=channel_input,
                     channel_id=channel_id,
                     video_id=video_id,
@@ -308,7 +296,9 @@ class YouTubeSurfaceScraper:
         return None
 
     @staticmethod
-    def get_video_transcript(video_id: str, transcript_languages: Iterable[str]) -> tuple[str | None, str | None]:
+    def get_video_transcript(
+        video_id: str, transcript_languages: Iterable[str]
+    ) -> tuple[TranscriptModel | None, str | None]:
         try:
             from youtube_transcript_api import YouTubeTranscriptApi
 
@@ -319,14 +309,14 @@ class YouTubeSurfaceScraper:
             if hasattr(YouTubeTranscriptApi, "get_transcript"):
                 chunks = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
                 text = " ".join(part.get("text", "").strip() for part in chunks if part.get("text")).strip()
-                return text or None, None
+                return YouTubeSurfaceScraper.to_transcript_model(text), None
 
             api = YouTubeTranscriptApi()
             try:
                 fetched = api.fetch(video_id, languages=languages)
                 text_parts = [snippet.text.strip() for snippet in fetched if getattr(snippet, "text", "").strip()]
                 text = " ".join(text_parts).strip()
-                return text or None, None
+                return YouTubeSurfaceScraper.to_transcript_model(text), None
             except Exception as preferred_error:  # noqa: BLE001
                 # Fallback: if preferred languages are missing, use first available transcript.
                 transcript_list = api.list(video_id)
@@ -339,7 +329,7 @@ class YouTubeSurfaceScraper:
                         text_parts = [snippet.text.strip() for snippet in fetched if getattr(snippet, "text", "").strip()]
                         text = " ".join(text_parts).strip()
                         if text:
-                            return text, None
+                            return YouTubeSurfaceScraper.to_transcript_model(text), None
                     except Exception:  # noqa: BLE001
                         continue
 
@@ -356,23 +346,6 @@ class YouTubeSurfaceScraper:
         return TranscriptModel(text=transcript_text)
 
     @staticmethod
-    def to_video_model(video: VideoItem) -> YouTubeVideoModel:
-        return YouTubeVideoModel(
-            channel_input=video.channel_input,
-            channel_id=video.channel_id,
-            video_id=video.video_id,
-            title=video.title,
-            url=video.url,
-            published_at=video.published_at,
-            transcript=YouTubeSurfaceScraper.to_transcript_model(video.transcript),
-            transcript_error=video.transcript_error,
-        )
-
-    @staticmethod
-    def to_video_models(videos: Sequence[VideoItem]) -> list[YouTubeVideoModel]:
-        return [YouTubeSurfaceScraper.to_video_model(video) for video in videos]
-
-    @staticmethod
     def serialize_results(results: Sequence[ChannelResult]) -> list[dict]:
         payload: list[dict] = []
         for result in results:
@@ -383,8 +356,7 @@ class YouTubeSurfaceScraper:
                 "videos": [],
             }
             for video in result.videos:
-                video_dict = asdict(video)
-                video_dict["published_at"] = video.published_at.isoformat()
+                video_dict = video.model_dump(mode="json")
                 item["videos"].append(video_dict)
             payload.append(item)
         return payload
@@ -421,7 +393,3 @@ def collect_latest_videos(
 
 def serialize_results(results: Sequence[ChannelResult]) -> list[dict]:
     return DEFAULT_SCRAPER.serialize_results(results)
-
-
-def to_video_models(videos: Sequence[VideoItem]) -> list[YouTubeVideoModel]:
-    return DEFAULT_SCRAPER.to_video_models(videos)
