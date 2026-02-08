@@ -35,27 +35,26 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
 5. Delivery
    - Email digest to a configured address.
 
-## Data Model (Initial)
-- Source
+## Data Model (Current)
+- YoutubeChannel
   - id
-  - name
-  - type (youtube, blog)
-  - url
-  - rss_url (optional)
+  - channel_input (unique)
   - active
+  - created_at
+  - updated_at
 - Article
   - id
-  - source_id
+  - source_type (`youtube`, `openai`, `anthropic`)
+  - source
   - title
-  - url
+  - url (unique)
+  - video_id (unique with `source_type` for YouTube)
   - published_at
-  - raw_content
   - summary
-  - created_at
-- Digest
-  - id
-  - date
-  - content
+  - raw_content (markdown or transcript)
+  - content_type (`markdown` or `transcript`)
+  - content_fetched_at
+  - content_error
   - created_at
 
 ## Project Structure
@@ -73,6 +72,7 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
     - openai.py
     - anthropic.py
     - pipeline.py
+    - enrich.py
     - blogs.py
   - summarize/
     - llm.py
@@ -92,6 +92,7 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - run_openai_surface.py
   - run_anthropic_surface.py
   - run_youtube_surface.py
+  - run_enrich.py
 - docker/
   - docker-compose.yml
   - example.environment.env
@@ -221,6 +222,24 @@ ALTER TABLE articles ADD COLUMN IF NOT EXISTS video_id VARCHAR(32);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_articles_source_video
   ON articles (source_type, video_id);
 ```
+
+## Stage 2 Enrichment
+Backfill missing content into `articles.raw_content`:
+```bash
+uv run python scripts/run_enrich.py --hours 240 --max-items 50
+```
+
+Apply schema changes (if tables already exist):
+```sql
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_type VARCHAR(32);
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_fetched_at TIMESTAMPTZ;
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_error TEXT;
+```
+
+Notes:
+- OpenAI + Anthropic use Docling to export markdown.
+- YouTube uses the transcript API and stores the transcript in `raw_content`.
+- `content_error` and `content_fetched_at` track failures and attempts.
 
 ## Scheduling
 - Run ingestion + digest every 24 hours.

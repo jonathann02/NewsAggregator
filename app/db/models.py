@@ -38,4 +38,7 @@ class Article(Base):
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    content_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    content_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
