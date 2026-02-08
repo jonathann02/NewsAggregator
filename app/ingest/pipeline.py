@@ -7,7 +7,7 @@ from app.db import SessionLocal, init_db
 from app.ingest.anthropic import AnthropicScraper
 from app.ingest.openai import OpenAINewsScraper
 from app.ingest.youtube import YouTubeSurfaceScraper
-from app.models import Article, YoutubeChannel
+from app.db.models import Article, YoutubeChannel
 
 
 def run_ingest(
@@ -53,6 +53,7 @@ def ingest_youtube(session: Session, lookback_hours: int) -> int:
                 source=video.channel_id,
                 title=video.title,
                 url=video.url,
+                video_id=video.video_id,
                 published_at=video.published_at,
                 summary=None,
                 raw_content=video.transcript.text if video.transcript else None,
@@ -113,11 +114,16 @@ def upsert_article(
     source: str,
     title: str,
     url: str,
+    video_id: str | None = None,
     published_at,
     summary: str | None,
     raw_content: str | None,
 ) -> int:
     existing = session.scalar(select(Article).where(Article.url == url))
+    if not existing and source_type == "youtube" and video_id:
+        existing = session.scalar(
+            select(Article).where(Article.source_type == "youtube", Article.video_id == video_id)
+        )
     if existing:
         return 0
 
@@ -127,6 +133,7 @@ def upsert_article(
             source=source,
             title=title,
             url=url,
+            video_id=video_id,
             published_at=published_at,
             summary=summary,
             raw_content=raw_content,

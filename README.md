@@ -61,8 +61,12 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
 ## Project Structure
 - app/
   - __init__.py
-  - config.py
-  - db.py
+  - db/
+    - __init__.py
+    - base.py
+    - models.py
+    - crud.py
+    - create_tables.py
   - models.py
   - ingest/
     - youtube.py
@@ -88,6 +92,9 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - run_openai_surface.py
   - run_anthropic_surface.py
   - run_youtube_surface.py
+- docker/
+  - docker-compose.yml
+  - example.environment.env
 - README.md
 
 ## Environment Variables
@@ -102,6 +109,26 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
 - EMAIL_FROM
 - DIGEST_RECIPIENT
 - TIMEZONE
+
+## Local Database Setup
+Start Postgres with Docker:
+```bash
+docker compose -f docker/docker-compose.yml up -d
+```
+
+Example env values (see `docker/example.environment.env`):
+```bash
+POSTGRES_USER=news_user
+POSTGRES_PASSWORD=news_pass
+POSTGRES_DB=news_aggregator
+POSTGRES_PORT=5432
+DATABASE_URL=postgresql+psycopg2://news_user:news_pass@localhost:5432/news_aggregator
+```
+
+Create tables:
+```bash
+uv run python -m app.db.create_tables
+```
 
 ## YouTube Surface Prototype
 - Script: `scripts/run_youtube_surface.py`
@@ -186,6 +213,13 @@ Seed a YouTube channel:
 ```sql
 INSERT INTO youtube_channels (channel_input, active)
 VALUES ('@OpenAI', true);
+```
+
+If you created tables before adding YouTube video IDs, apply this once:
+```sql
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS video_id VARCHAR(32);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_articles_source_video
+  ON articles (source_type, video_id);
 ```
 
 ## Scheduling

@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16
+    container_name: news_aggregator_db
+    restart: unless-stopped
+    env_file:
+      - example.environment.env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - news_aggregator_pgdata:/var/lib/postgresql/data
+
+volumes:
+  news_aggregator_pgdata:
