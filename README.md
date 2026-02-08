@@ -1,0 +1,141 @@
+# AI News Aggregator
+
+## Overview
+Build a Python backend that aggregates AI-related news from multiple sources (YouTube channels via RSS feeds and blog URLs via scraping), stores structured data in PostgreSQL, and generates a daily digest. The digest uses an LLM to produce short, insight-aware summaries and emails the result with links back to original sources.
+
+## Goals
+- Ingest from multiple source types:
+  - YouTube channels (via RSS feeds)
+  - Blog URLs (scraped)
+- Store data in PostgreSQL with clear structure for sources and articles.
+- Generate a daily digest every 24 hours using OpenAI and a configurable agent system prompt file.
+- Email the daily digest to a specified recipient using a free, easy-to-integrate provider (Gmail SMTP by default).
+- Keep the design deployable to Render with a simple schedule.
+
+## Tech Stack
+- Python backend
+- PostgreSQL
+- SQLAlchemy for models and table creation
+- OpenAI API for LLM summaries
+- Scheduler for daily runs
+- Email delivery via SMTP (Gmail SMTP by default)
+
+## High-Level Architecture
+1. Ingestion
+   - YouTube: Fetch latest videos from channel RSS feeds.
+   - Blogs: Scrape configured URLs and extract full article content (not just metadata).
+2. Storage
+   - Normalize into Source and Article records.
+   - Keep raw metadata and canonical URLs.
+3. Summarization
+   - Collect new articles for the last 24 hours.
+   - Use OpenAI with an agent system prompt to create short, insight-guided summaries.
+4. Digest
+   - Produce a compact list of snippets with links to originals.
+5. Delivery
+   - Email digest to a configured address.
+
+## Data Model (Initial)
+- Source
+  - id
+  - name
+  - type (youtube, blog)
+  - url
+  - rss_url (optional)
+  - active
+- Article
+  - id
+  - source_id
+  - title
+  - url
+  - published_at
+  - raw_content
+  - summary
+  - created_at
+- Digest
+  - id
+  - date
+  - content
+  - created_at
+
+## Project Structure
+- app/
+  - __init__.py
+  - config.py
+  - db.py
+  - models.py
+  - ingest/
+    - youtube.py
+    - blogs.py
+  - summarize/
+    - llm.py
+  - agent/
+    - system_prompt.txt
+  - digest/
+    - build.py
+    - email.py
+  - scheduler/
+    - daily.py
+- db/
+  - init.sql
+  - bootstrap.py
+- scripts/
+  - run_ingest.py
+  - run_digest.py
+- README.md
+
+## Environment Variables
+- DATABASE_URL
+- OPENAI_API_KEY
+- LLM_MODEL
+- AGENT_PROMPT_PATH
+- EMAIL_HOST
+- EMAIL_PORT
+- EMAIL_USERNAME
+- EMAIL_PASSWORD
+- EMAIL_FROM
+- DIGEST_RECIPIENT
+- TIMEZONE
+
+## YouTube Surface Prototype
+- Script: `scripts/run_youtube_surface.py`
+- Core module: `app/ingest/youtube.py`
+- Channel list file: `app/ingest/channels.txt`
+- Supported channel inputs:
+  - Channel ID (`UC...`)
+  - Channel URL (`https://www.youtube.com/channel/UC...`)
+  - Handle URL (`https://www.youtube.com/@handle`)
+  - Handle (`@handle`)
+- Core behavior:
+  - Resolves channel ID from provided input.
+  - Reads channel RSS feed.
+  - Filters videos by lookback window (default 24 hours).
+  - Optionally fetches transcript text per video.
+
+Example run:
+```bash
+uv run python scripts/run_youtube_surface.py --channels "@OpenAI" --hours 24
+```
+
+If transcripts are enabled, install:
+```bash
+uv pip install youtube-transcript-api
+```
+
+## Scheduling
+- Run ingestion + digest every 24 hours.
+- In production on Render, use a scheduled job (cron) to execute the daily pipeline.
+
+## Deployment Notes (Render)
+- Use a single web service or worker depending on architecture.
+- Keep configuration in environment variables.
+- Use a scheduled job for the daily digest run.
+- Docker setup should include a local PostgreSQL container (no external DB dependency).
+
+## Next Milestones
+1. Create SQLAlchemy models and initial DB bootstrap.
+2. Implement RSS ingestion for YouTube channels.
+3. Implement blog scraping ingestion.
+4. Add LLM summary and digest formatting.
+5. Add email delivery.
+6. Add scheduler entrypoint for daily runs.

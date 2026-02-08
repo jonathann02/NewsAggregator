@@ -1,0 +1,7 @@
+# One channel input per line.
+# Supported formats:
+# - UC... channel IDs
+# - https://www.youtube.com/channel/UC...
+# - https://www.youtube.com/@handle
+# - @handle
+
