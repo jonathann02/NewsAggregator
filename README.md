@@ -122,6 +122,25 @@ If transcripts are enabled, install:
 uv pip install youtube-transcript-api
 ```
 
+## Example Sources (Testing)
+- `https://openai.com/news/`
+- `https://www.anthropic.com/engineering`
+- `https://www.anthropic.com/research`
+
+## OpenAI News RSS Prototype
+- Script: `scripts/run_openai_surface.py`
+- Core module: `app/ingest/openai.py`
+- Default RSS: `https://openai.com/news/rss.xml`
+- Core behavior:
+  - Parses OpenAI RSS entries into a Pydantic model.
+  - Returns structured articles and filters by publish time window.
+  - Supports optional max article cap.
+
+Example run:
+```bash
+uv run python scripts/run_openai_surface.py --hours 48 --max-articles 10
+```
+
 ## Scheduling
 - Run ingestion + digest every 24 hours.
 - In production on Render, use a scheduled job (cron) to execute the daily pipeline.
