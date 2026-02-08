@@ -141,6 +141,23 @@ Example run:
 uv run python scripts/run_openai_surface.py --hours 48 --max-articles 10
 ```
 
+## Anthropic RSS Prototype
+- Script: `scripts/run_anthropic_surface.py`
+- Core module: `app/ingest/anthropic.py`
+- Feeds:
+  - `https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml`
+  - `https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml`
+  - `https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml`
+- Core behavior:
+  - Parses all three feeds into a Pydantic model.
+  - Returns structured articles and filters by publish time window.
+  - Supports optional per-feed max cap.
+
+Example run:
+```bash
+uv run python scripts/run_anthropic_surface.py --hours 240 --max-per-feed 5
+```
+
 ## Scheduling
 - Run ingestion + digest every 24 hours.
 - In production on Render, use a scheduled job (cron) to execute the daily pipeline.
