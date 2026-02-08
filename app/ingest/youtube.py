@@ -10,6 +10,7 @@ import feedparser
 import requests
 from bs4 import BeautifulSoup
 from dateutil import parser as date_parser
+from pydantic import BaseModel
 
 YOUTUBE_FEED_BASE = "https://www.youtube.com/feeds/videos.xml?channel_id="
 YOUTUBE_URL = "https://www.youtube.com"
@@ -48,6 +49,21 @@ class ChannelResult:
     channel_id: str | None
     videos: list[VideoItem]
     error: str | None
+
+
+class TranscriptModel(BaseModel):
+    text: str
+
+
+class YouTubeVideoModel(BaseModel):
+    channel_input: str
+    channel_id: str
+    video_id: str
+    title: str
+    url: str
+    published_at: datetime
+    transcript: TranscriptModel | None = None
+    transcript_error: str | None = None
 
 
 class YouTubeSurfaceScraper:
@@ -334,6 +350,29 @@ class YouTubeSurfaceScraper:
             return None, str(exc)
 
     @staticmethod
+    def to_transcript_model(transcript_text: str | None) -> TranscriptModel | None:
+        if not transcript_text:
+            return None
+        return TranscriptModel(text=transcript_text)
+
+    @staticmethod
+    def to_video_model(video: VideoItem) -> YouTubeVideoModel:
+        return YouTubeVideoModel(
+            channel_input=video.channel_input,
+            channel_id=video.channel_id,
+            video_id=video.video_id,
+            title=video.title,
+            url=video.url,
+            published_at=video.published_at,
+            transcript=YouTubeSurfaceScraper.to_transcript_model(video.transcript),
+            transcript_error=video.transcript_error,
+        )
+
+    @staticmethod
+    def to_video_models(videos: Sequence[VideoItem]) -> list[YouTubeVideoModel]:
+        return [YouTubeSurfaceScraper.to_video_model(video) for video in videos]
+
+    @staticmethod
     def serialize_results(results: Sequence[ChannelResult]) -> list[dict]:
         payload: list[dict] = []
         for result in results:
@@ -383,3 +422,6 @@ def collect_latest_videos(
 def serialize_results(results: Sequence[ChannelResult]) -> list[dict]:
     return DEFAULT_SCRAPER.serialize_results(results)
 
+
+def to_video_models(videos: Sequence[VideoItem]) -> list[YouTubeVideoModel]:
+    return DEFAULT_SCRAPER.to_video_models(videos)
