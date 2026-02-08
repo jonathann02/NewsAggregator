@@ -66,6 +66,9 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - models.py
   - ingest/
     - youtube.py
+    - openai.py
+    - anthropic.py
+    - pipeline.py
     - blogs.py
   - summarize/
     - llm.py
@@ -82,6 +85,9 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
 - scripts/
   - run_ingest.py
   - run_digest.py
+  - run_openai_surface.py
+  - run_anthropic_surface.py
+  - run_youtube_surface.py
 - README.md
 
 ## Environment Variables
@@ -156,6 +162,30 @@ uv run python scripts/run_openai_surface.py --hours 48 --max-articles 10
 Example run:
 ```bash
 uv run python scripts/run_anthropic_surface.py --hours 240 --max-per-feed 5
+```
+
+## Ingestion Pipeline
+- Runner: `scripts/run_ingest.py`
+- Orchestrates:
+  - YouTube (from `youtube_channels` table)
+  - OpenAI RSS
+  - Anthropic RSS
+- Stores all items in PostgreSQL tables (`youtube_channels`, `articles`).
+
+Example run:
+```bash
+uv run python scripts/run_ingest.py --hours 24
+```
+
+Optional full content fetch:
+```bash
+uv run python scripts/run_ingest.py --hours 24 --fetch-markdown
+```
+
+Seed a YouTube channel:
+```sql
+INSERT INTO youtube_channels (channel_input, active)
+VALUES ('@OpenAI', true);
 ```
 
 ## Scheduling
