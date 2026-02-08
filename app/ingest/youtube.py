@@ -286,10 +286,38 @@ def extract_video_id(video_url: str) -> str | None:
 def get_video_transcript(video_id: str, transcript_languages: Iterable[str]) -> tuple[str | None, str | None]:
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
+        languages = list(transcript_languages)
 
-        chunks = YouTubeTranscriptApi.get_transcript(video_id, languages=list(transcript_languages))
-        text = " ".join(part.get("text", "").strip() for part in chunks if part.get("text")).strip()
-        return text or None, None
+        # Compatibility across youtube-transcript-api versions:
+        # older versions expose get_transcript(...), newer versions use instance.fetch(...).
+        if hasattr(YouTubeTranscriptApi, "get_transcript"):
+            chunks = YouTubeTranscriptApi.get_transcript(video_id, languages=languages)
+            text = " ".join(part.get("text", "").strip() for part in chunks if part.get("text")).strip()
+            return text or None, None
+
+        api = YouTubeTranscriptApi()
+        try:
+            fetched = api.fetch(video_id, languages=languages)
+            text_parts = [snippet.text.strip() for snippet in fetched if getattr(snippet, "text", "").strip()]
+            text = " ".join(text_parts).strip()
+            return text or None, None
+        except Exception as preferred_error:  # noqa: BLE001
+            # Fallback: if preferred languages are missing, use the first available transcript.
+            transcript_list = api.list(video_id)
+            transcripts = list(transcript_list)
+            transcripts.sort(key=lambda transcript: transcript.is_generated)
+
+            for transcript in transcripts:
+                try:
+                    fetched = transcript.fetch()
+                    text_parts = [snippet.text.strip() for snippet in fetched if getattr(snippet, "text", "").strip()]
+                    text = " ".join(text_parts).strip()
+                    if text:
+                        return text, None
+                except Exception:  # noqa: BLE001
+                    continue
+
+            return None, str(preferred_error)
     except ModuleNotFoundError:
         return None, "Missing dependency: youtube-transcript-api"
     except Exception as exc:  # noqa: BLE001
