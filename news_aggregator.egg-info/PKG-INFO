@@ -5,6 +5,7 @@ Summary: AI news aggregator
 Requires-Python: >=3.10
 Description-Content-Type: text/markdown
 Requires-Dist: beautifulsoup4>=4.14.3
+Requires-Dist: docling>=2.72.0
 Requires-Dist: feedparser>=6.0.12
 Requires-Dist: openai>=2.17.0
 Requires-Dist: psycopg2-binary>=2.9.11
@@ -135,6 +136,25 @@ uv run python scripts/run_youtube_surface.py --channels "@OpenAI" --hours 24
 If transcripts are enabled, install:
 ```bash
 uv pip install youtube-transcript-api
+```
+
+## Example Sources (Testing)
+- `https://openai.com/news/`
+- `https://www.anthropic.com/engineering`
+- `https://www.anthropic.com/research`
+
+## OpenAI News RSS Prototype
+- Script: `scripts/run_openai_surface.py`
+- Core module: `app/ingest/openai.py`
+- Default RSS: `https://openai.com/news/rss.xml`
+- Core behavior:
+  - Parses OpenAI RSS entries into a Pydantic model.
+  - Returns structured articles and filters by publish time window.
+  - Supports optional max article cap.
+
+Example run:
+```bash
+uv run python scripts/run_openai_surface.py --hours 48 --max-articles 10
 ```
 
 ## Scheduling

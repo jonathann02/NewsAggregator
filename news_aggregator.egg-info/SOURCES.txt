@@ -2,6 +2,7 @@ README.md
 pyproject.toml
 app/__init__.py
 app/ingest/__init__.py
+app/ingest/openai.py
 app/ingest/youtube.py
 news_aggregator.egg-info/PKG-INFO
 news_aggregator.egg-info/SOURCES.txt

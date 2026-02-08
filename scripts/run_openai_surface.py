@@ -6,6 +6,7 @@ import sys
 
 from app.ingest.openai import (
     DEFAULT_OPENAI_RSS_URL,
+    OpenAINewsScraper,
     collect_recent_openai_articles,
     serialize_openai_articles,
 )
@@ -32,6 +33,11 @@ def parse_args() -> argparse.Namespace:
         default=DEFAULT_OPENAI_RSS_URL,
         help="RSS URL to parse (defaults to OpenAI news RSS).",
     )
+    parser.add_argument(
+        "--markdown-url",
+        default=None,
+        help="Optional URL to fetch and export as markdown via Docling.",
+    )
     return parser.parse_args()
 
 
@@ -40,6 +46,12 @@ def main() -> None:
         sys.stdout.reconfigure(encoding="utf-8")
 
     args = parse_args()
+    if args.markdown_url:
+        scraper = OpenAINewsScraper(rss_url=args.rss_url)
+        markdown = scraper.fetch_article_markdown(args.markdown_url)
+        print(markdown)
+        return
+
     articles = collect_recent_openai_articles(
         lookback_hours=args.hours,
         max_articles=args.max_articles,
@@ -52,4 +64,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

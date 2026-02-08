@@ -7,6 +7,7 @@ import feedparser
 import requests
 from dateutil import parser as date_parser
 from pydantic import BaseModel, Field
+from docling.document_converter import DocumentConverter
 
 DEFAULT_OPENAI_RSS_URL = "https://openai.com/news/rss.xml"
 
@@ -59,6 +60,19 @@ class OpenAINewsScraper:
                 break
 
         return articles
+
+    def fetch_article_markdown(self, url: str) -> str:
+        converter = DocumentConverter()
+        result = converter.convert(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+        )
+        return result.document.export_to_markdown()
 
     @staticmethod
     def parse_entry_datetime(entry: feedparser.FeedParserDict) -> datetime | None:
