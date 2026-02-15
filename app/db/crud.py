@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Article, YoutubeChannel
+from app.db.models import Article, DigestItem, YoutubeChannel
 
 
 def create_youtube_channel(session: Session, channel_input: str, active: bool = True) -> YoutubeChannel:
@@ -88,3 +88,33 @@ def list_articles(session: Session, source_type: str | None = None, limit: int =
 def delete_article(session: Session, url: str) -> int:
     result = session.execute(delete(Article).where(Article.url == url))
     return result.rowcount or 0
+
+
+def create_digest_item(
+    session: Session,
+    *,
+    article_id: int,
+    article_url: str,
+    digest_title: str,
+    digest_summary: str,
+    model: str,
+) -> DigestItem:
+    existing = session.scalar(select(DigestItem).where(DigestItem.article_id == article_id))
+    if existing:
+        return existing
+
+    item = DigestItem(
+        article_id=article_id,
+        article_url=article_url,
+        digest_title=digest_title,
+        digest_summary=digest_summary,
+        model=model,
+    )
+    session.add(item)
+    session.flush()
+    return item
+
+
+def list_digest_items(session: Session, limit: int = 100) -> list[DigestItem]:
+    stmt = select(DigestItem).order_by(DigestItem.created_at.desc()).limit(limit)
+    return list(session.scalars(stmt))

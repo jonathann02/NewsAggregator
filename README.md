@@ -56,10 +56,22 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - content_fetched_at
   - content_error
   - created_at
+- DigestItem
+  - id
+  - article_id (foreign key to `articles.id`, unique)
+  - article_url
+  - digest_title
+  - digest_summary (2-3 sentences)
+  - model
+  - created_at
+  - updated_at
 
 ## Project Structure
 - app/
   - __init__.py
+  - agent/
+    - __init__.py
+    - digest_instructions.txt
   - db/
     - __init__.py
     - base.py
@@ -67,32 +79,26 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
     - crud.py
     - create_tables.py
   - models.py
+  - digest/
+    - __init__.py
+    - process.py
   - ingest/
     - youtube.py
     - openai.py
     - anthropic.py
     - pipeline.py
     - enrich.py
-    - blogs.py
   - summarize/
     - llm.py
-  - agent/
-    - system_prompt.txt
-  - digest/
-    - build.py
-    - email.py
   - scheduler/
     - daily.py
-- db/
-  - init.sql
-  - bootstrap.py
 - scripts/
   - run_ingest.py
-  - run_digest.py
   - run_openai_surface.py
   - run_anthropic_surface.py
   - run_youtube_surface.py
   - run_enrich.py
+  - run_process_digest.py
 - docker/
   - docker-compose.yml
   - example.environment.env
@@ -110,6 +116,10 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
 - EMAIL_FROM
 - DIGEST_RECIPIENT
 - TIMEZONE
+
+Practical note:
+- Python scripts in this project currently read env vars from the active shell.
+- If you keep keys in `.env`, load them into your shell/session before running scripts.
 
 ## Local Database Setup
 Start Postgres with Docker:
@@ -130,6 +140,19 @@ Create tables:
 ```bash
 uv run python -m app.db.create_tables
 ```
+
+Beekeeper Studio connection values:
+- Type: PostgreSQL
+- Host: `localhost`
+- Port: `5432`
+- Database: `news_aggregator`
+- Username: `news_user`
+- Password: `news_pass`
+- SSL: Off for local dev
+
+Important:
+- In Beekeeper, do not put `postgresql+psycopg2://...` in the database field.
+- If using URL mode in Beekeeper, use `postgresql://...` (without `+psycopg2`).
 
 ## YouTube Surface Prototype
 - Script: `scripts/run_youtube_surface.py`
@@ -256,9 +279,44 @@ CREATE TABLE IF NOT EXISTS pipeline_state (
 TODO (later):
 - Add Webshare proxy support for YouTube transcript requests to reduce IP-block/rate-limit failures during enrichment.
 
+## Stage 3 Digest Processing
+Generate digest items from all articles that do not yet have a digest row:
+```bash
+uv run python scripts/run_process_digest.py --max-items 100
+```
+
+Model and API:
+- Uses OpenAI Responses API.
+- Default model: `gpt-5.1-instant`.
+- Uses structured text output (`json_schema`) with fields:
+  - `digest_title`
+  - `digest_summary`
+
+Agent prompt:
+- File: `app/agent/digest_instructions.txt`
+- Defines role/context and output quality rules for digest generation.
+
+Digest table creation (if table is missing in an already-running database):
+```sql
+CREATE TABLE IF NOT EXISTS digest_items (
+  id SERIAL PRIMARY KEY,
+  article_id INTEGER NOT NULL UNIQUE REFERENCES articles(id) ON DELETE CASCADE,
+  article_url VARCHAR(1024) NOT NULL,
+  digest_title VARCHAR(512) NOT NULL,
+  digest_summary TEXT NOT NULL,
+  model VARCHAR(100) NOT NULL DEFAULT 'gpt-5.1-instant',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+Verification:
+- The digest table name is `digest_items` (not `digests`).
+
 ## Scheduling
 - Run ingestion + digest every 24 hours.
 - In production on Render, use a scheduled job (cron) to execute the daily pipeline.
+- TODO (later): add an explicit cron job configuration for `run_ingest.py`, `run_enrich.py`, and `run_process_digest.py`.
 
 ## Deployment Notes (Render)
 - Use a single web service or worker depending on architecture.
