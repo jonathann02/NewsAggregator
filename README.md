@@ -110,9 +110,11 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - run_rank_digest.py
   - run_email_digest.py
   - run_send_digest_email.py
+  - run_daily_pipeline.py
 - docker/
   - docker-compose.yml
   - example.environment.env
+- render.yaml
 - README.md
 
 ## Environment Variables
@@ -127,6 +129,7 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
 - EMAIL_FROM
 - EMAIL_USE_TLS
 - DIGEST_RECIPIENT
+- DIGEST_RECIPIENT_NAME
 - DIGEST_MODEL
 - RANK_MODEL
 - EMAIL_MODEL
@@ -414,16 +417,68 @@ Notes:
 - Plain text body is rendered as markdown with sections/headers; HTML alternative is attached by default.
 - Use `--text-only` to send plain text only.
 
+## Daily End-to-End Runner
+Single command that runs all stages in order:
+1. ingest
+2. enrich
+3. digest processing
+4. build + send newsletter email
+
+Run locally:
+```bash
+uv run --env-file .env python scripts/run_daily_pipeline.py --hours 24 --max-items 100 --top-n 10
+```
+
+Useful args:
+- `--hours` (default `24`)
+- `--max-items` (default `100`)
+- `--top-n` (default `10`)
+- `--recipient-name` (default from `DIGEST_RECIPIENT_NAME`, else `Dave`)
+
 ## Scheduling
-- Run ingestion + digest every 24 hours.
-- In production on Render, use a scheduled job (cron) to execute the daily pipeline.
-- TODO (later): add an explicit cron job configuration for `run_ingest.py`, `run_enrich.py`, `run_process_digest.py`, and `run_send_digest_email.py`.
+- Run the daily pipeline every 24 hours using `scripts/run_daily_pipeline.py`.
+- In production, Render Cron triggers this command once daily with `--hours 24`.
 
 ## Deployment Notes (Render)
-- Use a single web service or worker depending on architecture.
-- Keep configuration in environment variables.
-- Use a scheduled job for the daily digest run.
-- Docker setup should include a local PostgreSQL container (no external DB dependency).
+- This repository includes a Render Blueprint file: `render.yaml`.
+- Production setup uses:
+  - Render Managed Postgres (`news-aggregator-db`)
+  - Render Cron Job (`news-aggregator-daily`)
+- Cron command:
+  - `python scripts/run_daily_pipeline.py --hours 24 --max-items 100 --top-n 10`
+- Schedule in blueprint:
+  - `0 08 * * *` (UTC, once daily)
+
+### Deploy Steps (Render)
+1. Push branch to GitHub.
+2. In Render, create a Blueprint service from this repo (`render.yaml`).
+3. Set secret env vars in Render for:
+   - `OPENAI_API_KEY`
+   - `EMAIL_HOST`
+   - `EMAIL_USERNAME`
+   - `EMAIL_PASSWORD`
+   - `EMAIL_FROM`
+   - `DIGEST_RECIPIENT`
+4. Verify non-secret defaults:
+   - `EMAIL_PORT=587`
+   - `EMAIL_USE_TLS=true`
+   - `DIGEST_RECIPIENT_NAME=Dave` (or your preferred name)
+   - `DIGEST_MODEL=gpt-5.1`
+   - `RANK_MODEL=gpt-5.1`
+   - `EMAIL_MODEL=gpt-5.1`
+
+### First-Run Bootstrap
+1. Trigger the cron job manually once from Render.
+   - `init_db()` in the pipeline will create tables if they do not exist.
+2. Seed at least one YouTube channel in production DB:
+```sql
+INSERT INTO youtube_channels (channel_input, active)
+VALUES ('UCawZsQWqfGSbCI5yjkdVkTA', true);
+```
+3. Trigger the cron job again and verify:
+   - new/updated rows in `articles`
+   - rows in `digest_items`
+   - digest email received by `DIGEST_RECIPIENT`
 
 ## Next Milestones
 1. Create SQLAlchemy models and initial DB bootstrap.
