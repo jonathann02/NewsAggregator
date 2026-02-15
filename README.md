@@ -241,6 +241,21 @@ Notes:
 - YouTube uses the transcript API and stores the transcript in `raw_content`.
 - `content_error` and `content_fetched_at` track failures and attempts.
 
+YouTube rate limiting safeguards:
+- Small delay and jitter between transcript requests.
+- Detects IP blocks and pauses YouTube enrichment for 6 hours.
+- Requires a small state table:
+```sql
+CREATE TABLE IF NOT EXISTS pipeline_state (
+  key VARCHAR(100) PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+TODO (later):
+- Add Webshare proxy support for YouTube transcript requests to reduce IP-block/rate-limit failures during enrichment.
+
 ## Scheduling
 - Run ingestion + digest every 24 hours.
 - In production on Render, use a scheduled job (cron) to execute the daily pipeline.

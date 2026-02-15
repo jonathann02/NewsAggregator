@@ -18,7 +18,7 @@ CHANNEL_ID_PATTERN = re.compile(r"^UC[a-zA-Z0-9_-]{22}$")
 CHANNEL_ID_IN_HTML_PATTERN = re.compile(r'"channelId":"(UC[a-zA-Z0-9_-]{22})"')
 EXTERNAL_ID_IN_HTML_PATTERN = re.compile(r'"externalId":"(UC[a-zA-Z0-9_-]{22})"')
 BROWSE_ID_IN_HTML_PATTERN = re.compile(r'"browseId":"(UC[a-zA-Z0-9_-]{22})"')
-VIDEO_ID_IN_URL_PATTERN = re.compile(r"(?:v=|/videos/|/embed/|youtu\.be/)([a-zA-Z0-9_-]{11})")
+VIDEO_ID_IN_URL_PATTERN = re.compile(r"(?:v=|/videos/|/embed/|/shorts/|youtu\.be/)([a-zA-Z0-9_-]{11})")
 DEFAULT_YOUTUBE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
