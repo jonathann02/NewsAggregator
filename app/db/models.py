@@ -65,7 +65,7 @@ class DigestItem(Base):
     article_url: Mapped[str] = mapped_column(String(1024), nullable=False)
     digest_title: Mapped[str] = mapped_column(String(512), nullable=False)
     digest_summary: Mapped[str] = mapped_column(Text, nullable=False)
-    model: Mapped[str] = mapped_column(String(100), nullable=False, default="gpt-5.1-instant")
+    model: Mapped[str] = mapped_column(String(100), nullable=False, default="gpt-5.1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

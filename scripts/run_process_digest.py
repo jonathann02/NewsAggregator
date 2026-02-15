@@ -33,6 +33,10 @@ def main() -> None:
             errors=result["errors"],
         )
     )
+    if result["errors"]:
+        print("First errors:")
+        for item in result["error_details"][:5]:
+            print(f"- article_id={item['article_id']} error={item['error']}")
 
 
 if __name__ == "__main__":

@@ -72,6 +72,8 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - agent/
     - __init__.py
     - digest_instructions.txt
+    - assignment_editor_instructions.txt
+    - email_editor_instructions.txt
   - db/
     - __init__.py
     - base.py
@@ -82,6 +84,12 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - digest/
     - __init__.py
     - process.py
+    - rank.py
+    - email.py
+  - email/
+    - __init__.py
+    - render.py
+    - send.py
   - ingest/
     - youtube.py
     - openai.py
@@ -99,6 +107,9 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
   - run_youtube_surface.py
   - run_enrich.py
   - run_process_digest.py
+  - run_rank_digest.py
+  - run_email_digest.py
+  - run_send_digest_email.py
 - docker/
   - docker-compose.yml
   - example.environment.env
@@ -114,12 +125,17 @@ Build a Python backend that aggregates AI-related news from multiple sources (Yo
 - EMAIL_USERNAME
 - EMAIL_PASSWORD
 - EMAIL_FROM
+- EMAIL_USE_TLS
 - DIGEST_RECIPIENT
+- DIGEST_MODEL
+- RANK_MODEL
+- EMAIL_MODEL
 - TIMEZONE
 
 Practical note:
 - Python scripts in this project currently read env vars from the active shell.
 - If you keep keys in `.env`, load them into your shell/session before running scripts.
+- With `uv`, use `--env-file .env` to load both `DATABASE_URL` and `OPENAI_API_KEY`.
 
 ## Local Database Setup
 Start Postgres with Docker:
@@ -285,9 +301,14 @@ Generate digest items from all articles that do not yet have a digest row:
 uv run python scripts/run_process_digest.py --max-items 100
 ```
 
+Recommended run command with `.env` loading:
+```bash
+uv run --env-file .env python scripts/run_process_digest.py --max-items 100
+```
+
 Model and API:
 - Uses OpenAI Responses API.
-- Default model: `gpt-5.1-instant`.
+- Default model: `gpt-5.1` (override via `--model` or `DIGEST_MODEL` env var).
 - Uses structured text output (`json_schema`) with fields:
   - `digest_title`
   - `digest_summary`
@@ -304,7 +325,7 @@ CREATE TABLE IF NOT EXISTS digest_items (
   article_url VARCHAR(1024) NOT NULL,
   digest_title VARCHAR(512) NOT NULL,
   digest_summary TEXT NOT NULL,
-  model VARCHAR(100) NOT NULL DEFAULT 'gpt-5.1-instant',
+  model VARCHAR(100) NOT NULL DEFAULT 'gpt-5.1',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -312,11 +333,91 @@ CREATE TABLE IF NOT EXISTS digest_items (
 
 Verification:
 - The digest table name is `digest_items` (not `digests`).
+- If Beekeeper table view looks stale, run:
+```sql
+SELECT COUNT(*) FROM public.digest_items;
+SELECT id, article_id, digest_title, created_at
+FROM public.digest_items
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+Common digest processing errors:
+- `model_not_found`: use `--model gpt-5.1` (or another model available to your account).
+- `insufficient_quota`: add billing/quota in OpenAI before re-running.
+
+## Stage 4 Digest Ranking (Aggregator)
+Ranking agent name:
+- `Assignment Editor` (news-desk style ranking/orchestration role).
+
+What it does:
+- Takes digest items from the last 24 hours.
+- Uses a default user profile (`AI Product and Engineering Lead`) with role, interests, and priorities.
+- Calls OpenAI Responses API to score and rank items.
+- Returns a strongly-typed ranked list via Pydantic models.
+
+Runner:
+```bash
+uv run --env-file .env python scripts/run_rank_digest.py --hours 24 --max-items 100
+```
+
+Output model:
+- `DigestRankingResultModel`
+  - `profile_name`
+  - `model`
+  - `generated_at`
+  - `ranked_items[]`
+
+Each ranked item includes:
+- `rank`
+- `digest_item_id`
+- `article_id`
+- `article_url`
+- `source_type`
+- `digest_title`
+- `digest_summary`
+- `score` (0-100)
+- `reason`
+
+Agent prompt file:
+- `app/agent/assignment_editor_instructions.txt`
+
+## Stage 5 Email Composition and Delivery
+This stage converts ranked digest results into a normal email (not JSON) and sends it via SMTP.
+
+Email composition runner (builds subject + greeting + introduction + top items, returns JSON payload):
+```bash
+uv run --env-file .env python scripts/run_email_digest.py --hours 24 --max-items 100 --top-n 10 --recipient-name Dave
+```
+
+Email send runner (builds + sends human-readable email):
+```bash
+uv run --env-file .env python scripts/run_send_digest_email.py --hours 24 --max-items 100 --top-n 10 --recipient-name Dave
+```
+
+Dry run (preview subject/body without sending):
+```bash
+uv run --env-file .env python scripts/run_send_digest_email.py --dry-run --top-n 10 --recipient-name Dave
+```
+
+SMTP settings used:
+- `EMAIL_HOST`
+- `EMAIL_PORT`
+- `EMAIL_USERNAME`
+- `EMAIL_PASSWORD`
+- `EMAIL_FROM`
+- `EMAIL_USE_TLS`
+- `DIGEST_RECIPIENT`
+
+Notes:
+- Email payload is typed via Pydantic (`DailyDigestEmailModel`) and includes `subject`, `greeting`, `introduction`, and ranked items.
+- Plain text body is rendered as markdown with sections/headers; HTML alternative is attached by default.
+- Use `--text-only` to send plain text only.
 
 ## Scheduling
 - Run ingestion + digest every 24 hours.
 - In production on Render, use a scheduled job (cron) to execute the daily pipeline.
-- TODO (later): add an explicit cron job configuration for `run_ingest.py`, `run_enrich.py`, and `run_process_digest.py`.
+- TODO (later): add an explicit cron job configuration for `run_ingest.py`, `run_enrich.py`, `run_process_digest.py`, and `run_send_digest_email.py`.
 
 ## Deployment Notes (Render)
 - Use a single web service or worker depending on architecture.

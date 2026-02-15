@@ -4,14 +4,16 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from openai import OpenAI
+from openai import BadRequestError
 from sqlalchemy import select
 
 from app.db import SessionLocal, init_db
 from app.db.models import Article, DigestItem
 
-DIGEST_MODEL = "gpt-5.1-instant"
+DIGEST_MODEL = os.getenv("DIGEST_MODEL", "gpt-5.1")
 DEFAULT_MAX_INPUT_CHARS = 12000
 AGENT_INSTRUCTIONS_PATH = Path("app/agent/digest_instructions.txt")
 
@@ -31,6 +33,7 @@ def run_process_digest(max_items: int | None = None, model: str = DIGEST_MODEL) 
         created = 0
         skipped = 0
         errors = 0
+        error_details: list[dict[str, Any]] = []
 
         for article in articles:
             try:
@@ -50,8 +53,15 @@ def run_process_digest(max_items: int | None = None, model: str = DIGEST_MODEL) 
                     )
                 )
                 created += 1
-            except Exception:
+            except Exception as exc:  # noqa: BLE001
                 errors += 1
+                error_details.append(
+                    {
+                        "article_id": article.id,
+                        "article_url": article.url,
+                        "error": str(exc),
+                    }
+                )
 
         session.commit()
         return {
@@ -59,6 +69,7 @@ def run_process_digest(max_items: int | None = None, model: str = DIGEST_MODEL) 
             "created": created,
             "skipped": skipped,
             "errors": errors,
+            "error_details": error_details,
         }
     except Exception:
         session.rollback()
@@ -80,27 +91,34 @@ def _select_articles_missing_digest(session, max_items: int | None = None) -> li
 
 def _summarize_article(client: OpenAI, model: str, instructions: str, article: Article) -> dict[str, str]:
     content = _build_article_input(article)
-    response = client.responses.create(
-        model=model,
-        instructions=instructions,
-        input=content,
-        text={
-            "format": {
-                "type": "json_schema",
-                "name": "digest_item",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "properties": {
-                        "digest_title": {"type": "string"},
-                        "digest_summary": {"type": "string"},
+    try:
+        response = client.responses.create(
+            model=model,
+            instructions=instructions,
+            input=content,
+            text={
+                "format": {
+                    "type": "json_schema",
+                    "name": "digest_item",
+                    "strict": True,
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "digest_title": {"type": "string"},
+                            "digest_summary": {"type": "string"},
+                        },
+                        "required": ["digest_title", "digest_summary"],
+                        "additionalProperties": False,
                     },
-                    "required": ["digest_title", "digest_summary"],
-                    "additionalProperties": False,
-                },
-            }
-        },
-    )
+                }
+            },
+        )
+    except BadRequestError as exc:
+        if "model_not_found" in str(exc):
+            raise RuntimeError(
+                f"Model '{model}' was not found. Use --model with an available model (for example: gpt-5.1)."
+            ) from exc
+        raise
 
     output_text = _extract_output_text(response)
     parsed = json.loads(output_text)
