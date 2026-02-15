@@ -1,0 +1,43 @@
+databases:
+  - name: news-aggregator-db
+    databaseName: news_aggregator
+    user: news_user
+    plan: basic-256mb
+
+services:
+  - type: cron
+    name: news-aggregator-daily
+    runtime: python
+    plan: starter
+    schedule: "0 08 * * *"
+    buildCommand: pip install .
+    startCommand: python scripts/run_daily_pipeline.py --hours 24 --max-items 100 --top-n 10
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: news-aggregator-db
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_USERNAME
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_USE_TLS
+        value: "true"
+      - key: DIGEST_RECIPIENT
+        sync: false
+      - key: DIGEST_RECIPIENT_NAME
+        value: "Dave"
+      - key: DIGEST_MODEL
+        value: "gpt-5.1"
+      - key: RANK_MODEL
+        value: "gpt-5.1"
+      - key: EMAIL_MODEL
+        value: "gpt-5.1"
